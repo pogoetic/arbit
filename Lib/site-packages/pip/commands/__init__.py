@@ -4,9 +4,12 @@ Package containing all pip commands
 from __future__ import absolute_import
 
 from pip.commands.completion import CompletionCommand
+from pip.commands.download import DownloadCommand
 from pip.commands.freeze import FreezeCommand
+from pip.commands.hash import HashCommand
 from pip.commands.help import HelpCommand
 from pip.commands.list import ListCommand
+from pip.commands.check import CheckCommand
 from pip.commands.search import SearchCommand
 from pip.commands.show import ShowCommand
 from pip.commands.install import InstallCommand
@@ -17,29 +20,36 @@ from pip.commands.wheel import WheelCommand
 commands_dict = {
     CompletionCommand.name: CompletionCommand,
     FreezeCommand.name: FreezeCommand,
+    HashCommand.name: HashCommand,
     HelpCommand.name: HelpCommand,
     SearchCommand.name: SearchCommand,
     ShowCommand.name: ShowCommand,
     InstallCommand.name: InstallCommand,
     UninstallCommand.name: UninstallCommand,
+    DownloadCommand.name: DownloadCommand,
     ListCommand.name: ListCommand,
+    CheckCommand.name: CheckCommand,
     WheelCommand.name: WheelCommand,
 }
 
 
 commands_order = [
     InstallCommand,
+    DownloadCommand,
     UninstallCommand,
     FreezeCommand,
     ListCommand,
     ShowCommand,
+    CheckCommand,
     SearchCommand,
     WheelCommand,
+    HashCommand,
+    CompletionCommand,
     HelpCommand,
 ]
 
 
-def get_summaries(ignore_hidden=True, ordered=True):
+def get_summaries(ordered=True):
     """Yields sorted (command name, command summary) tuples."""
 
     if ordered:
@@ -48,9 +58,6 @@ def get_summaries(ignore_hidden=True, ordered=True):
         cmditems = commands_dict.items()
 
     for name, command_class in cmditems:
-        if ignore_hidden and command_class.hidden:
-            continue
-
         yield (name, command_class.summary)
 
 

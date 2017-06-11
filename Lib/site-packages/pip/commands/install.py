@@ -14,14 +14,13 @@ except ImportError:
 from pip.req import RequirementSet
 from pip.basecommand import RequirementCommand
 from pip.locations import virtualenv_no_global, distutils_scheme
-from pip.index import PackageFinder
 from pip.exceptions import (
     InstallationError, CommandError, PreviousBuildDirError,
 )
 from pip import cmdoptions
-from pip.utils import ensure_dir
+from pip.utils import ensure_dir, get_installed_version
 from pip.utils.build import BuildDirectory
-from pip.utils.deprecation import RemovedInPip8Warning
+from pip.utils.deprecation import RemovedInPip10Warning
 from pip.utils.filesystem import check_path_owner
 from pip.wheel import WheelCache, WheelBuilder
 
@@ -82,7 +81,6 @@ class InstallCommand(RequirementCommand):
                   "regardless of what's already installed."),
         )
 
-        cmd_opts.add_option(cmdoptions.download_cache())
         cmd_opts.add_option(cmdoptions.src())
 
         cmd_opts.add_option(
@@ -90,8 +88,21 @@ class InstallCommand(RequirementCommand):
             dest='upgrade',
             action='store_true',
             help='Upgrade all specified packages to the newest available '
-                 'version. This process is recursive regardless of whether '
-                 'a dependency is already satisfied.'
+                 'version. The handling of dependencies depends on the '
+                 'upgrade-strategy used.'
+        )
+
+        cmd_opts.add_option(
+            '--upgrade-strategy',
+            dest='upgrade_strategy',
+            default='eager',
+            choices=['only-if-needed', 'eager'],
+            help='Determines how dependency upgrading should be handled. '
+                 '"eager" - dependencies are upgraded regardless of '
+                 'whether the currently installed version satisfies the '
+                 'requirements of the upgraded package(s). '
+                 '"only-if-needed" -  are upgraded only when they do not '
+                 'satisfy the requirements of the upgraded package(s).'
         )
 
         cmd_opts.add_option(
@@ -107,6 +118,7 @@ class InstallCommand(RequirementCommand):
             action='store_true',
             help='Ignore the installed packages (reinstalling instead).')
 
+        cmd_opts.add_option(cmdoptions.ignore_requires_python())
         cmd_opts.add_option(cmdoptions.no_deps())
 
         cmd_opts.add_option(cmdoptions.install_options())
@@ -139,6 +151,14 @@ class InstallCommand(RequirementCommand):
                  "directory.")
 
         cmd_opts.add_option(
+            '--prefix',
+            dest='prefix_path',
+            metavar='dir',
+            default=None,
+            help="Installation prefix where lib, bin and other top-level "
+                 "folders are placed")
+
+        cmd_opts.add_option(
             "--compile",
             action="store_true",
             dest="compile",
@@ -157,15 +177,9 @@ class InstallCommand(RequirementCommand):
         cmd_opts.add_option(cmdoptions.no_use_wheel())
         cmd_opts.add_option(cmdoptions.no_binary())
         cmd_opts.add_option(cmdoptions.only_binary())
-
-        cmd_opts.add_option(
-            '--pre',
-            action='store_true',
-            default=False,
-            help="Include pre-release and development versions. By default, "
-                 "pip only finds stable versions.")
-
+        cmd_opts.add_option(cmdoptions.pre())
         cmd_opts.add_option(cmdoptions.no_clean())
+        cmd_opts.add_option(cmdoptions.require_hashes())
 
         index_opts = cmdoptions.make_option_group(
             cmdoptions.index_group,
@@ -175,30 +189,50 @@ class InstallCommand(RequirementCommand):
         self.parser.insert_option_group(0, index_opts)
         self.parser.insert_option_group(0, cmd_opts)
 
-    def _build_package_finder(self, options, index_urls, session):
-        """
-        Create a package finder appropriate to this install command.
-        This method is meant to be overridden by subclasses, not
-        called directly.
-        """
-        return PackageFinder(
-            find_links=options.find_links,
-            format_control=options.format_control,
-            index_urls=index_urls,
-            allow_external=options.allow_external,
-            allow_unverified=options.allow_unverified,
-            allow_all_external=options.allow_all_external,
-            trusted_hosts=options.trusted_hosts,
-            allow_all_prereleases=options.pre,
-            process_dependency_links=options.process_dependency_links,
-            session=session,
-        )
-
     def run(self, options, args):
         cmdoptions.resolve_wheel_no_use_binary(options)
         cmdoptions.check_install_build_global(options)
 
+        if options.as_egg:
+            warnings.warn(
+                "--egg has been deprecated and will be removed in the future. "
+                "This flag is mutually exclusive with large parts of pip, and "
+                "actually using it invalidates pip's ability to manage the "
+                "installation process.",
+                RemovedInPip10Warning,
+            )
+
+        if options.allow_external:
+            warnings.warn(
+                "--allow-external has been deprecated and will be removed in "
+                "the future. Due to changes in the repository protocol, it no "
+                "longer has any effect.",
+                RemovedInPip10Warning,
+            )
+
+        if options.allow_all_external:
+            warnings.warn(
+                "--allow-all-external has been deprecated and will be removed "
+                "in the future. Due to changes in the repository protocol, it "
+                "no longer has any effect.",
+                RemovedInPip10Warning,
+            )
+
+        if options.allow_unverified:
+            warnings.warn(
+                "--allow-unverified has been deprecated and will be removed "
+                "in the future. Due to changes in the repository protocol, it "
+                "no longer has any effect.",
+                RemovedInPip10Warning,
+            )
+
         if options.download_dir:
+            warnings.warn(
+                "pip install --download has been deprecated and will be "
+                "removed in the future. Pip now has a download command that "
+                "should be used instead.",
+                RemovedInPip10Warning,
+            )
             options.ignore_installed = True
 
         if options.build_dir:
@@ -207,6 +241,11 @@ class InstallCommand(RequirementCommand):
         options.src_dir = os.path.abspath(options.src_dir)
         install_options = options.install_options or []
         if options.use_user_site:
+            if options.prefix_path:
+                raise CommandError(
+                    "Can not combine '--user' and '--prefix' as they imply "
+                    "different installation locations"
+                )
             if virtualenv_no_global():
                 raise InstallationError(
                     "Can not perform a '--user' install. User site-packages "
@@ -229,22 +268,10 @@ class InstallCommand(RequirementCommand):
             install_options.append('--home=' + temp_target_dir)
 
         global_options = options.global_options or []
-        index_urls = [options.index_url] + options.extra_index_urls
-        if options.no_index:
-            logger.info('Ignoring indexes: %s', ','.join(index_urls))
-            index_urls = []
-
-        if options.download_cache:
-            warnings.warn(
-                "--download-cache has been deprecated and will be removed in "
-                "the future. Pip now automatically uses and configures its "
-                "cache.",
-                RemovedInPip8Warning,
-            )
 
         with self._build_session(options) as session:
 
-            finder = self._build_package_finder(options, index_urls, session)
+            finder = self._build_package_finder(options, session)
             build_delete = (not (options.no_clean or options.build_dir))
             wheel_cache = WheelCache(options.cache_dir, options.format_control)
             if options.cache_dir and not check_path_owner(options.cache_dir):
@@ -265,9 +292,11 @@ class InstallCommand(RequirementCommand):
                     src_dir=options.src_dir,
                     download_dir=options.download_dir,
                     upgrade=options.upgrade,
+                    upgrade_strategy=options.upgrade_strategy,
                     as_egg=options.as_egg,
                     ignore_installed=options.ignore_installed,
                     ignore_dependencies=options.ignore_dependencies,
+                    ignore_requires_python=options.ignore_requires_python,
                     force_reinstall=options.force_reinstall,
                     use_user_site=options.use_user_site,
                     target_dir=temp_target_dir,
@@ -275,6 +304,7 @@ class InstallCommand(RequirementCommand):
                     pycompile=options.compile,
                     isolated=options.isolated_mode,
                     wheel_cache=wheel_cache,
+                    require_hashes=options.require_hashes,
                 )
 
                 self.populate_requirement_set(
@@ -309,6 +339,15 @@ class InstallCommand(RequirementCommand):
                             install_options,
                             global_options,
                             root=options.root_path,
+                            prefix=options.prefix_path,
+                        )
+
+                        possible_lib_locations = get_lib_location_guesses(
+                            user=options.use_user_site,
+                            home=temp_target_dir,
+                            root=options.root_path,
+                            prefix=options.prefix_path,
+                            isolated=options.isolated_mode,
                         )
                         reqs = sorted(
                             requirement_set.successfully_installed,
@@ -317,9 +356,11 @@ class InstallCommand(RequirementCommand):
                         for req in reqs:
                             item = req.name
                             try:
-                                if hasattr(req, 'installed_version'):
-                                    if req.installed_version:
-                                        item += '-' + req.installed_version
+                                installed_version = get_installed_version(
+                                    req.name, possible_lib_locations
+                                )
+                                if installed_version:
+                                    item += '-' + installed_version
                             except Exception:
                                 pass
                             items.append(item)
@@ -346,35 +387,51 @@ class InstallCommand(RequirementCommand):
         if options.target_dir:
             ensure_dir(options.target_dir)
 
-            lib_dir = distutils_scheme('', home=temp_target_dir)['purelib']
+            # Checking both purelib and platlib directories for installed
+            # packages to be moved to target directory
+            lib_dir_list = []
 
-            for item in os.listdir(lib_dir):
-                target_item_dir = os.path.join(options.target_dir, item)
-                if os.path.exists(target_item_dir):
-                    if not options.upgrade:
-                        logger.warning(
-                            'Target directory %s already exists. Specify '
-                            '--upgrade to force replacement.',
-                            target_item_dir
-                        )
-                        continue
-                    if os.path.islink(target_item_dir):
-                        logger.warning(
-                            'Target directory %s already exists and is '
-                            'a link. Pip will not automatically replace '
-                            'links, please remove if replacement is '
-                            'desired.',
-                            target_item_dir
-                        )
-                        continue
-                    if os.path.isdir(target_item_dir):
-                        shutil.rmtree(target_item_dir)
-                    else:
-                        os.remove(target_item_dir)
+            purelib_dir = distutils_scheme('', home=temp_target_dir)['purelib']
+            platlib_dir = distutils_scheme('', home=temp_target_dir)['platlib']
 
-                shutil.move(
-                    os.path.join(lib_dir, item),
-                    target_item_dir
-                )
+            if os.path.exists(purelib_dir):
+                lib_dir_list.append(purelib_dir)
+            if os.path.exists(platlib_dir) and platlib_dir != purelib_dir:
+                lib_dir_list.append(platlib_dir)
+
+            for lib_dir in lib_dir_list:
+                for item in os.listdir(lib_dir):
+                    target_item_dir = os.path.join(options.target_dir, item)
+                    if os.path.exists(target_item_dir):
+                        if not options.upgrade:
+                            logger.warning(
+                                'Target directory %s already exists. Specify '
+                                '--upgrade to force replacement.',
+                                target_item_dir
+                            )
+                            continue
+                        if os.path.islink(target_item_dir):
+                            logger.warning(
+                                'Target directory %s already exists and is '
+                                'a link. Pip will not automatically replace '
+                                'links, please remove if replacement is '
+                                'desired.',
+                                target_item_dir
+                            )
+                            continue
+                        if os.path.isdir(target_item_dir):
+                            shutil.rmtree(target_item_dir)
+                        else:
+                            os.remove(target_item_dir)
+
+                    shutil.move(
+                        os.path.join(lib_dir, item),
+                        target_item_dir
+                    )
             shutil.rmtree(temp_target_dir)
         return requirement_set
+
+
+def get_lib_location_guesses(*args, **kwargs):
+    scheme = distutils_scheme('', *args, **kwargs)
+    return [scheme['purelib'], scheme['platlib']]
