@@ -47,25 +47,26 @@ def gemini_private(nonce, func, pair=None, amt=None, price=None):
 		request = "/v1/order/cancel/session"
 		url = gemini_endpoint+request
 		payload = """{{
-					"request": {r},
-					"nonce": {n}
+					"request": "{r}",
+					"nonce": "{n}"
 					}}""".format(r=request,n=nonce)
 	elif func == 'buy':
 		request = "/v1/order/new"
 		url = gemini_endpoint+request
 		print url
 		payload = """{{
-					"request": {r},
-					"nonce": {n},
+			"request": "{r}",
+			"nonce": "{n}",
 
-					"symbol": "{p}",
-					"amount": "{a}",
-					"price": "{pr}",
-					"side":"buy",
-					"type": "exchange limit"
-					}}""".format(r=request,n=nonce,p=pair,a=amt,pr=price)
-					#"client_order_id": "20150102-4738721", // A client-specified order token
-					#"options": ["maker-or-cancel"] // execution options; may be omitted for a standard limit order
+			"symbol": "{p}",
+			"amount": "{a}",
+			"price": "{pr}",
+			"side":"buy",
+			"type": "exchange limit"
+			}}""".format(r=request,n=nonce,p=pair,a=amt,pr=price)
+			#"client_order_id": "20150102-4738721", // A client-specified order token
+			#"options": ["maker-or-cancel"] // execution options; may be omitted for a standard limit order
+		print payload
 	else: 
 		return None
 
