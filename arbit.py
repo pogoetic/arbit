@@ -1,5 +1,5 @@
-import requests, ConfigParser, base64, hmac, hashlib, json
-# json, uuid, time, pyodbc
+import requests, ConfigParser, base64, hmac, hashlib, json, pyodbc
+# json, uuid, time
 
 #Keys
 config = ConfigParser.RawConfigParser(allow_no_value=True)
@@ -20,7 +20,8 @@ polo_pk = config.get("API", "polo_pk")
 
 connstring = "Driver={ODBC Driver 13 for SQL Server};Server=tcp:"+config.get("DB","server")+";DATABASE="+config.get("DB","database")+";UID="+config.get("DB","uname")+";PWD="+ config.get("DB","pwd")
 
-#conn = pyodbc.connect(connstring)
+conn = pyodbc.connect(connstring)
+c = conn.cursor()
 
 sandbox = 1
 #May need to store max nonce in DB by API, increment from historical max value
@@ -31,6 +32,18 @@ if sandbox == 1:
 	gemini_k = gemini_test_k
 	gemini_pk = gemini_test_pk
 
+def getnonce(func, endpoint, nonce=None):
+	if func == 'get':
+		c.execute('select current_nonce from dbo.api_lu where endpoint = (?)',(gemini_endpoint,))
+		row = c.fetchone()
+		return row[0]
+	elif func == 'update' and nonce != None:
+		c.execute('update dbo.api_lu set current_nonce = (?) where endpoint = (?)',(nonce,gemini_endpoint))
+		conn.commit()
+		return 1
+	else: 
+		raise 
+
 def show_response(r):
 	if r.raise_for_status():
 		r.raise_for_status()
@@ -40,8 +53,10 @@ def show_response(r):
 		print json.dumps(r.json(), indent=4)
 		print('Success!')
 
-def gemini_private(nonce, func, pair=None, amt=None, price=None):
+def gemini_private(func, pair=None, amt=None, price=None):
 	#https://docs.gemini.com/rest-api/#private-api-invocation
+
+	nonce = getnonce(func='get', endpoint=gemini_endpoint)
 
 	if func == 'cancelall':
 		request = "/v1/order/cancel/session"
@@ -71,7 +86,6 @@ def gemini_private(nonce, func, pair=None, amt=None, price=None):
 		return None
 
 	b64 = base64.b64encode(payload)
-	nonce+=1
 	sig = hmac.new(gemini_pk, b64, hashlib.sha384).hexdigest()
 
 	headers = {'Content-Type': 'text/plain',
@@ -82,6 +96,7 @@ def gemini_private(nonce, func, pair=None, amt=None, price=None):
 
 	r = requests.post(url, headers=headers)
 	show_response(r)
+	getnonce(func='update', endpoint=gemini_endpoint, nonce=nonce+1)
 
 def gemini_public(pair):
 	r =requests.get(gemini_endpoint+"/v1/pubticker/{}".format(pair))
@@ -89,7 +104,7 @@ def gemini_public(pair):
 
 #gemini_public('ethusd')
 #gemini_private(nonce,func='cancelall')
-gemini_private(nonce,func='buy',pair='ethusd',amt=1,price=150.00)
+gemini_private(func='buy',pair='ethusd',amt=1,price=150.00)
 
 
 """SAMPLE REQUEST
