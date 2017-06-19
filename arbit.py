@@ -89,77 +89,102 @@ def gemini_public(pair):
     r =requests.get(gemini_endpoint+"/v1/pubticker/{}".format(pair))
     show_response(r)
 
-def kraken_private(func, pair=None, amt=None, price=None):
+def kraken(func, pair=None, amt=None, price=None):
     #rate limits: Only placing orders you intend to fill and keeping the rate down to 1 per second is generally enough to not hit this limit.
     #headers
-    #API-Key = API key
-    #API-Sign = Message signature using HMAC-SHA512 of (URI path + SHA256(nonce + POST data)) and base64 decoded secret API key
-    nonce = int(1000*time.time())
+    k = krakenex.API()
+    k.load_key('keys.cfg')
 
     if func == 'balance':
-        request = "/0/private/Balance"
-        url = kraken_endpoint+request
-        payload = {"nonce": str(nonce)}
+        r = k.query_private('Balance')
+        print json.dumps(r, indent=4)
+
+    elif func == 'assets': #get list of all Kraken currencies
+        payload = {'aclass':'currency'}
+        if pair!=None:
+            payload['asset']=pair
+        r = k.query_public('Assets', payload)    
+        print json.dumps(r, indent=4)
+
+    elif func == 'fees':
+        payload = {}
+        if pair!=None:
+            payload['pair']=pair
+        r = k.query_public('AssetPairs', payload)    
+        #print json.dumps(r, indent=4)
+        return r
+
+    elif func == 'quote' and pair!=None: #get list of all Kraken currencies
+        payload = {'pair': pair}
+        r = k.query_public('Ticker', payload)    
+        return r
+        
     elif func == 'buy':
         return None
     else: 
         return None
+    """
+    k.query_private('AddOrder', {'pair': 'XXBTZEUR',
+                                 'type': 'buy',
+                                 'ordertype': 'limit',
+                                 'price': '1',
+                                 'volume': '1',
+                                 'close[pair]': 'XXBTZEUR',
+                                 'close[type]': 'sell',
+                                 'close[ordertype]': 'limit',
+                                 'close[price]': '9001',
+                                 'close[volume]': '1'})
+    """
 
-##########
-    postdata = urllib.urlencode(payload)
-    # Unicode-objects must be encoded before hashing
-    #encoded = (str(nonce) + postdata).encode()
-    message = request + hashlib.sha256(str(nonce) + postdata).digest()
-    signature = hmac.new(base64.b64decode(kraken_pk), message, hashlib.sha512) 
-    print base64.b64encode(signature.digest())
-#############
-
-    headers = { 'User-Agent': 'Kraken Python API Agent', 
-                'API-Key': kraken_k,
-                'API-Sign': base64.b64encode(signature.digest())}
-
-    #r = requests.post(url, headers=headers)
-    #show_response(r)
+def networkfees(asset):
+    if asset == 'BTC':
+        endpoint='https://bitcoinfees.21.co/api/v1/fees/recommended'
+        r =requests.get(endpoint)
+        r = r.json()
+        print 'BTC Fee: '+str(r['fastestFee']*0.00000001)
+        print 'Expected Cost BTC = '+ str(225*r['fastestFee']*0.00000001)
+    elif asset == 'ETH':
+        endpoint='https://api.blockcypher.com/v1/eth/main'
+        r =requests.get(endpoint)
+        r = r.json()
+        print 'ETH Fee: '+str(r['high_gas_price']*0.000000000000000001)
+        print 'Expected cost ETH = '+str(21000*r['high_gas_price']*0.000000000000000001)
 
 #gemini_public('ethusd')
 #gemini_private(func='cancelall')
 #gemini_private(func='buy',pair='ethusd',amt=1,price=150.00)
-#kraken_private(func='balance')  
+#kraken(func='assets')  #optional: pair='XBT' (USDT,XXBT,XETH)
+r = kraken(func='fees', pair='XXBTZUSD,XETHZUSD,USDTZUSD')  #optional: pair='XXBTZUSD,XETHZUSD,USDTZUSD'
+#print json.dumps(r, indent=4)
+print 'XXBTZUSD buy fee: '+str(r['result']['XXBTZUSD']['fees'][0][1])
+print 'XXBTZUSD sell fee: '+str(r['result']['XXBTZUSD']['fees_maker'][0][1])
+print 'XETHZUSD buy fee: '+str(r['result']['XETHZUSD']['fees'][0][1])
+print 'XETHZUSD sell fee: '+str(r['result']['XETHZUSD']['fees_maker'][0][1])
+print 'USDTZUSD buy fee: '+str(r['result']['USDTZUSD']['fees'][0][1])
+print 'USDTZUSD sell fee: '+str(r['result']['USDTZUSD']['fees_maker'][0][1])
 
-k = krakenex.API()
-k.load_key('keys.cfg')
-r = k.query_private('Balance')
-print json.dumps(r, indent=4)
+r = kraken(func='quote', pair='XXBTZUSD,XETHZUSD,USDTZUSD')
+print 'XXBTZUSD ask: '+str(r['result']['XXBTZUSD']['a'][0])
+print 'XXBTZUSD bid: '+str(r['result']['XXBTZUSD']['b'][0])
+print 'XETHZUSD ask: '+str(r['result']['XETHZUSD']['a'][0])
+print 'XETHZUSD bid: '+str(r['result']['XETHZUSD']['b'][0])
+print 'USDTZUSD ask: '+str(r['result']['USDTZUSD']['a'][0])
+print 'USDTZUSD bid: '+str(r['result']['USDTZUSD']['b'][0])
+
+networkfees('BTC')
+networkfees('ETH')
 
 
 
-"""
-k.query_private('AddOrder', {'pair': 'XXBTZEUR',
-                             'type': 'buy',
-                             'ordertype': 'limit',
-                             'price': '1',
-                             'volume': '1',
-                             'close[pair]': 'XXBTZEUR',
-                             'close[type]': 'sell',
-                             'close[ordertype]': 'limit',
-                             'close[price]': '9001',
-                             'close[volume]': '1'})
-"""
 
+#Bitcoin xfer Fees
+#https://bitcoinfees.21.co/api
+    # The lowest fee (in satoshis per byte) that will currently result in the fastest transaction confirmations (usually 0 to 1 block delay).
+    #rough estimate of tx bytes = in*180 + out*34 + 10 plus or minus 'in' [https://bitcoin.stackexchange.com/questions/1195/how-to-calculate-transaction-size-before-sending]
+    #1 in and 1 out roughly = 225 bytes
+    #https://bitcoinfees.21.co/api/v1/fees/recommended
 
-"""SAMPLE REQUEST
-
-POST /v1/order/status
-Content-Type: text/plain
-Content-Length: 0
-X-GEMINI-APIKEY: mykey
-X-GEMINI-PAYLOAD:ewogICAgInJlcXVlc3QiOiAiL3YxL29yZGVyL3N
-    0YXR1cyIsCiAgICAibm9uY2UiOiAxMjM0NTYsCgogICAgIm9yZGV
-    yX2lkIjogMTg4MzQKfQo=
-X-GEMINI-SIGNATURE: 337cc8b4ea692cfe65b4a85fcc9f042b2e3f
-    702ac956fd098d600ab15705775017beae402be773ceee10719f
-    f70d710f
-
-"""
-
-#429 = Too many requests
+#ETH xfer fees
+#https://www.blockcypher.com/dev/ethereum/#chain-endpoint
+    #Returns the current gas price in Wei (1Wei = 0.000000000000000001 ETH)
+    #https://api.blockcypher.com/v1/eth/main

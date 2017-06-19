@@ -121,10 +121,5 @@ class API(object):
             'API-Key': self.key,
             'API-Sign': base64.b64encode(signature.digest())
         }
-
-        print urlpath
-        print req
-        print conn 
-        print headers
-
+        
         return self._query(urlpath, req, conn, headers)
