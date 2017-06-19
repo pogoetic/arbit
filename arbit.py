@@ -137,18 +137,40 @@ def kraken(func, pair=None, amt=None, price=None):
     """
 
 def networkfees(asset):
+    #Bitcoin xfer Fees
+    #https://bitcoinfees.21.co/api
+        # The lowest fee (in satoshis per byte) that will currently result in the fastest transaction confirmations (usually 0 to 1 block delay).
+        #rough estimate of tx bytes = in*180 + out*34 + 10 plus or minus 'in' [https://bitcoin.stackexchange.com/questions/1195/how-to-calculate-transaction-size-before-sending]
+        #1 in and 1 out roughly = 225 bytes
+        #https://bitcoinfees.21.co/api/v1/fees/recommended
+
+    #ETH xfer fees
+    #https://www.blockcypher.com/dev/ethereum/#chain-endpoint
+        #Returns the current gas price in Wei (1Wei = 0.000000000000000001 ETH)
+        #https://api.blockcypher.com/v1/eth/main
+
     if asset == 'BTC':
         endpoint='https://bitcoinfees.21.co/api/v1/fees/recommended'
         r =requests.get(endpoint)
         r = r.json()
         print 'BTC Fee: '+str(r['fastestFee']*0.00000001)
         print 'Expected Cost BTC = '+ str(225*r['fastestFee']*0.00000001)
+        return 225*r['fastestFee']*0.00000001
     elif asset == 'ETH':
         endpoint='https://api.blockcypher.com/v1/eth/main'
         r =requests.get(endpoint)
         r = r.json()
-        print 'ETH Fee: '+str(r['high_gas_price']*0.000000000000000001)
-        print 'Expected cost ETH = '+str(21000*r['high_gas_price']*0.000000000000000001)
+        print 'ETH Fee: '+str(r['medium_gas_price']*0.000000000000000001)
+        print 'Expected cost ETH = '+str(21000*r['medium_gas_price']*0.000000000000000001)
+        return 21000*r['medium_gas_price']*0.000000000000000001
+
+
+#############################################################
+
+
+
+
+
 
 #gemini_public('ethusd')
 #gemini_private(func='cancelall')
@@ -171,20 +193,9 @@ print 'XETHZUSD bid: '+str(r['result']['XETHZUSD']['b'][0])
 print 'USDTZUSD ask: '+str(r['result']['USDTZUSD']['a'][0])
 print 'USDTZUSD bid: '+str(r['result']['USDTZUSD']['b'][0])
 
-networkfees('BTC')
-networkfees('ETH')
+print networkfees('BTC')
+print networkfees('ETH')
 
 
 
 
-#Bitcoin xfer Fees
-#https://bitcoinfees.21.co/api
-    # The lowest fee (in satoshis per byte) that will currently result in the fastest transaction confirmations (usually 0 to 1 block delay).
-    #rough estimate of tx bytes = in*180 + out*34 + 10 plus or minus 'in' [https://bitcoin.stackexchange.com/questions/1195/how-to-calculate-transaction-size-before-sending]
-    #1 in and 1 out roughly = 225 bytes
-    #https://bitcoinfees.21.co/api/v1/fees/recommended
-
-#ETH xfer fees
-#https://www.blockcypher.com/dev/ethereum/#chain-endpoint
-    #Returns the current gas price in Wei (1Wei = 0.000000000000000001 ETH)
-    #https://api.blockcypher.com/v1/eth/main
