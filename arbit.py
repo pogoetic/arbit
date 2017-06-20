@@ -1,4 +1,4 @@
-import requests, ConfigParser, base64, hmac, hashlib, json, pyodbc, time, urllib
+import requests, ConfigParser, base64, hmac, hashlib, json, pyodbc, time, urllib, urllib2
 import krakenex
 # json, uuid
 
@@ -19,6 +19,8 @@ gemini_test_endpoint = config.get("API", "gemini_test_endpoint")
 
 polo_k = config.get("API", "polo_k")
 polo_pk = config.get("API", "polo_pk")
+polo_private_endpoint = config.get("API", "polo_private_endpoint")
+polo_public_endpoint = config.get("API", "polo_public_endpoint")
 
 connstring = "Driver={ODBC Driver 13 for SQL Server};Server=tcp:"+config.get("DB","server")+";DATABASE="+config.get("DB","database")+";UID="+config.get("DB","uname")+";PWD="+ config.get("DB","pwd")
 
@@ -98,6 +100,7 @@ def kraken(func, pair=None, amt=None, price=None):
     if func == 'balance':
         r = k.query_private('Balance')
         print json.dumps(r, indent=4)
+        return r
 
     elif func == 'assets': #get list of all Kraken currencies
         payload = {'aclass':'currency'}
@@ -135,6 +138,30 @@ def kraken(func, pair=None, amt=None, price=None):
                                  'close[price]': '9001',
                                  'close[volume]': '1'})
     """
+
+def poloniex(func, pair=None, amt=None, price=None):
+    req = {}
+
+    if func == 'balance':
+        req['command'] = 'returnBalances'
+        req['nonce'] = int(time.time()*1000)
+        post_data = urllib.urlencode(req)
+
+        sign = hmac.new(polo_pk, post_data, hashlib.sha512).hexdigest()
+        headers = {
+            'Key': polo_k,
+            'Sign': sign
+        }
+
+        r = requests.post(polo_private_endpoint, data=req, headers=headers)
+        filtered = {k: v for k, v in r.json().iteritems() if v!='0.00000000'}
+        return filtered
+
+    if func == 'quote':
+        req['command'] = 'returnTicker'
+        r = requests.get(polo_public_endpoint,params=req)
+        return r.json()
+
 
 def networkfees(asset):
     #Bitcoin xfer Fees
@@ -176,6 +203,9 @@ def networkfees(asset):
 #gemini_private(func='cancelall')
 #gemini_private(func='buy',pair='ethusd',amt=1,price=150.00)
 #kraken(func='assets')  #optional: pair='XBT' (USDT,XXBT,XETH)
+r = kraken(func='balance')
+print r['result']['KFEE']
+
 r = kraken(func='fees', pair='XXBTZUSD,XETHZUSD,USDTZUSD')  #optional: pair='XXBTZUSD,XETHZUSD,USDTZUSD'
 #print json.dumps(r, indent=4)
 print 'XXBTZUSD buy fee: '+str(r['result']['XXBTZUSD']['fees'][0][1])
@@ -193,9 +223,27 @@ print 'XETHZUSD bid: '+str(r['result']['XETHZUSD']['b'][0])
 print 'USDTZUSD ask: '+str(r['result']['USDTZUSD']['a'][0])
 print 'USDTZUSD bid: '+str(r['result']['USDTZUSD']['b'][0])
 
+
+
 print networkfees('BTC')
 print networkfees('ETH')
+print '\n'
 
 
+
+r = poloniex(func='balance')
+for k, v in r.iteritems():
+    print k+' : '+v 
+
+r = poloniex(func='quote')
+print 'BTCUSDT ask: '+str(r['USDT_BTC']['lowestAsk'])
+print 'BTCUSDT bid: '+str(r['USDT_BTC']['highestBid'])
+print 'ETHUSDT ask: '+str(r['USDT_ETH']['lowestAsk'])
+print 'ETHUSDT bid: '+str(r['USDT_ETH']['highestBid'])
+
+
+#Next: Calculate 'final value of buy+xfer' and 'final value of sell+xfer' for each currency pair
+# Compare this value to the same values on the other side and execute if they result in some min gain
+# factor in Kraken Fee Credits r = kraken(func='balance') print r['result']['KFEE']
 
 
