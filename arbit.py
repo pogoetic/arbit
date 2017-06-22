@@ -139,28 +139,38 @@ def kraken(func, pair=None, amt=None, price=None):
                                  'close[volume]': '1'})
     """
 
+def polo_private(command, req = {}):
+    req['command'] = command
+    req['nonce'] = int(time.time()*1000)
+    post_data = urllib.urlencode(req)
+    sign = hmac.new(polo_pk, post_data, hashlib.sha512).hexdigest()
+    headers = {
+        'Key': polo_k,
+        'Sign': sign
+    }
+    r = requests.post(polo_private_endpoint, data=req, headers=headers)
+
+    if command == 'returnBalances':
+        filtered = {k: v for k, v in r.json().iteritems() if v!='0.00000000'}
+        return filtered
+    else:
+        return r.json()
+
 def poloniex(func, pair=None, amt=None, price=None):
     req = {}
 
     if func == 'balance':
-        req['command'] = 'returnBalances'
-        req['nonce'] = int(time.time()*1000)
-        post_data = urllib.urlencode(req)
-
-        sign = hmac.new(polo_pk, post_data, hashlib.sha512).hexdigest()
-        headers = {
-            'Key': polo_k,
-            'Sign': sign
-        }
-
-        r = requests.post(polo_private_endpoint, data=req, headers=headers)
-        filtered = {k: v for k, v in r.json().iteritems() if v!='0.00000000'}
-        return filtered
+        r = polo_private(command='returnBalances')
+        return r
 
     if func == 'quote':
         req['command'] = 'returnTicker'
         r = requests.get(polo_public_endpoint,params=req)
         return r.json()
+
+    if func == 'fees':
+        r = polo_private(command='returnFeeInfo')
+        return r
 
 
 def networkfees(asset):
@@ -180,16 +190,16 @@ def networkfees(asset):
         endpoint='https://bitcoinfees.21.co/api/v1/fees/recommended'
         r =requests.get(endpoint)
         r = r.json()
-        print 'BTC Fee: '+str(r['fastestFee']*0.00000001)
-        print 'Expected Cost BTC = '+ str(225*r['fastestFee']*0.00000001)
-        return 225*r['fastestFee']*0.00000001
+        #print 'BTC Fee: '+str(r['fastestFee']/100000000.0) #Fee returned in Satoshis per Byte
+        #print 'Expected Cost BTC = '+ str(225*r['fastestFee']/100000000.0)
+        return 225*r['fastestFee']/100000000.0
     elif asset == 'ETH':
         endpoint='https://api.blockcypher.com/v1/eth/main'
         r =requests.get(endpoint)
         r = r.json()
-        print 'ETH Fee: '+str(r['medium_gas_price']*0.000000000000000001)
-        print 'Expected cost ETH = '+str(21000*r['medium_gas_price']*0.000000000000000001)
-        return 21000*r['medium_gas_price']*0.000000000000000001
+        #print 'ETH Fee: '+str(r['high_gas_price']/1000000000000000000.0) #Fee returned in Wei per Byte
+        #print 'Expected cost ETH = '+str(21000*r['high_gas_price']/1000000000000000000.0)
+        return 21000*r['high_gas_price']/1000000000000000000.0
 
 
 #############################################################
@@ -202,6 +212,8 @@ def networkfees(asset):
 #gemini_public('ethusd')
 #gemini_private(func='cancelall')
 #gemini_private(func='buy',pair='ethusd',amt=1,price=150.00)
+
+"""
 #kraken(func='assets')  #optional: pair='XBT' (USDT,XXBT,XETH)
 r = kraken(func='balance')
 print r['result']['KFEE']
@@ -222,28 +234,104 @@ print 'XETHZUSD ask: '+str(r['result']['XETHZUSD']['a'][0])
 print 'XETHZUSD bid: '+str(r['result']['XETHZUSD']['b'][0])
 print 'USDTZUSD ask: '+str(r['result']['USDTZUSD']['a'][0])
 print 'USDTZUSD bid: '+str(r['result']['USDTZUSD']['b'][0])
+"""
 
+f = kraken(func='fees', pair='XXBTZUSD,XETHZUSD,USDTZUSD')  #optional: pair='XXBTZUSD,XETHZUSD,USDTZUSD'
+q = kraken(func='quote', pair='XXBTZUSD,XETHZUSD,USDTZUSD')
+amt = 1.0
 
+#Buy BTC
+quoteprice = float(q['result']['XXBTZUSD']['a'][0])
+purchasecost = amt*quoteprice
+tradecost = purchasecost*(f['result']['XXBTZUSD']['fees'][0][1]/100.0)
+xfercost = networkfees('BTC')*quoteprice
+netbuyvalue = purchasecost - tradecost - xfercost
+netbuyamt = amt - (amt*(f['result']['XXBTZUSD']['fees'][0][1]/100.0)) -  networkfees('BTC')
+#pay the quoteprice, receive netbuy value in other exchange
 
+print 'quoteprice: '+str(quoteprice)
+print 'purchasecost: '+str(purchasecost)
+print 'tradecost: '+str(tradecost)
+print 'xfercos: '+str(xfercost)
+print 'netbuyvalue: '+str(netbuyvalue)
+print 'netbuyamt: '+str(netbuyamt)
+
+"""
 print networkfees('BTC')
 print networkfees('ETH')
 print '\n'
+"""
 
-
-
+"""
 r = poloniex(func='balance')
 for k, v in r.iteritems():
     print k+' : '+v 
+
+r = poloniex(func='fees')
+print json.dumps(r,indent=4)
+
 
 r = poloniex(func='quote')
 print 'BTCUSDT ask: '+str(r['USDT_BTC']['lowestAsk'])
 print 'BTCUSDT bid: '+str(r['USDT_BTC']['highestBid'])
 print 'ETHUSDT ask: '+str(r['USDT_ETH']['lowestAsk'])
 print 'ETHUSDT bid: '+str(r['USDT_ETH']['highestBid'])
+"""
+
+
+q = poloniex(func='quote')
+f = poloniex(func='fees')
+
+#Sell BTC
+amt = netbuyamt
+quoteprice = float(q['USDT_BTC']['highestBid'])
+saleproceeds = amt*quoteprice
+tradecost = saleproceeds*float(f['makerFee'])
+xfercost = networkfees('BTC')*quoteprice
+netsellvalue = saleproceeds - tradecost - xfercost
+gainonsale = (netsellvalue/netbuyvalue)-1.0
+netsellamt = amt - (amt*float(f['makerFee'])) - networkfees('BTC')
+
+print 'quoteprice:' +str(quoteprice)
+print 'saleproceeds: '+str(saleproceeds)
+print 'tradecost: '+str(tradecost)
+print 'xfercost: '+str(xfercost)
+print 'netsellvalue: '+str(netsellvalue)
+print 'netsellamt: '+str(netsellamt)
+print 'gainonsale: '+str(gainonsale)
+
+
 
 
 #Next: Calculate 'final value of buy+xfer' and 'final value of sell+xfer' for each currency pair
 # Compare this value to the same values on the other side and execute if they result in some min gain
 # factor in Kraken Fee Credits r = kraken(func='balance') print r['result']['KFEE']
 
-
+"""
+var unitMap = {
+    'wei':          '1',
+    'kwei':         '1000',
+    'ada':          '1000',
+    'femtoether':   '1000',
+    'mwei':         '1000000',
+    'babbage':      '1000000',
+    'picoether':    '1000000',
+    'gwei':         '1000000000',
+    'shannon':      '1000000000',
+    'nanoether':    '1000000000',
+    'nano':         '1000000000',
+    'szabo':        '1000000000000',
+    'microether':   '1000000000000',
+    'micro':        '1000000000000',
+    'finney':       '1000000000000000',
+    'milliether':    '1000000000000000',
+    'milli':         '1000000000000000',
+    'ether':        '1000000000000000000',
+    'kether':       '1000000000000000000000',
+    'grand':        '1000000000000000000000',
+    'einstein':     '1000000000000000000000',
+    'mether':       '1000000000000000000000000',
+    'gether':       '1000000000000000000000000000',
+    'tether':       '1000000000000000000000000000000'
+};
+"""
