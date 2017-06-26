@@ -287,7 +287,10 @@ amt = netbuyamt
 quoteprice = float(q['USDT_BTC']['highestBid'])
 saleproceeds = amt*quoteprice
 tradecost = saleproceeds*float(f['makerFee'])
-xfercost = networkfees('BTC')*quoteprice
+
+#this wont be in BTC!!!!!
+xfercost = networkfees('BTC')*quoteprice 
+
 netsellvalue = saleproceeds - tradecost - xfercost
 gainonsale = (netsellvalue/netbuyvalue)-1.0
 netsellamt = amt - (amt*float(f['makerFee'])) - networkfees('BTC')
@@ -300,12 +303,47 @@ print 'netsellvalue: '+str(netsellvalue)
 print 'netsellamt: '+str(netsellamt)
 print 'gainonsale: '+str(gainonsale)
 
+def strategycheck(buypoint, sellpoint, buyasset, sellasset):
+    if buypoint == 'kraken':
+        if buyasset == 'BTC':
+            f = kraken(func='fees', pair='XXBTZUSD,XXBTXETH')  #optional: pair='XXBTZUSD,XETHZUSD,USDTZUSD'
+            q = kraken(func='quote', pair='XXBTZUSD,XXBTXETH')
+            quoteprice = float(q['result']['XXBTZUSD']['a'][0])
+            purchasecost = amt*quoteprice
+            tradecost = purchasecost*(f['result']['XXBTZUSD']['fees'][0][1]/100.0)
+            xfercost = networkfees('BTC')*quoteprice
+            netbuyvalue = purchasecost - tradecost - xfercost
+            netbuyamt = amt - (amt*(f['result']['XXBTZUSD']['fees'][0][1]/100.0)) -  networkfees('BTC')
 
+            #Look for a sellpoint that
+        elif buyasset == 'ETH':
 
+        else:
+            return None
+
+    elif buypoint == 'polo':
+
+    else:
+        return None 
+
+#1. Calculate End-2-End Opportinity (BuySell or SellBuy with ETH/BTC on Kraken/Polo) (8 combinations)
+#2. Execute
+    #Buy
+    #Check that its bought
+    #(RECHECK STRATEGY)
+    #Transfer
+    #Check that its transferred
+    #(RECHECK STRATEGY)
+    #Sell
+    #Check that it sold
+    #(RECHECK STRATEGY)
+    #Transfer Back, Repeat
 
 #Next: Calculate 'final value of buy+xfer' and 'final value of sell+xfer' for each currency pair
 # Compare this value to the same values on the other side and execute if they result in some min gain
 # factor in Kraken Fee Credits r = kraken(func='balance') print r['result']['KFEE']
+
+#Use Shapeshift to get money in/out of Gemini or other non USDT exchanges
 
 """
 var unitMap = {
