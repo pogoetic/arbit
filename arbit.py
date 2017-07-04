@@ -330,15 +330,22 @@ def checkStrategy(exc,tt,asset):
             return None
 
         if tt == 'buy':
-            tradefee = f['result'][pair]['fees'][0][1]/100.0
-            networkfee = networkfees(asset)
-            quoteprice = float(q['result'][pair]['a'][0])
-            purchasecost = amt*quoteprice
-            tradecost = purchasecost*tradefee
-            xfercost = networkfee*quoteprice
-            netbuyvalue = purchasecost - tradecost - xfercost
-            netbuyamt = amt - (amt*tradefee) -  networkfee
-            return netbuyvalue, netbuyamt
+            feetype = 'fees'
+            quotetype = 'a'
+        elif tt == 'sell':
+            feetype = 'fees_maker'
+            quotetype = 'b'
+
+        tradefee = f['result'][pair][feetype][0][1]/100.0
+        networkfee = networkfees(asset)
+        quoteprice = float(q['result'][pair][quotetype][0])
+        costorproceed = amt*quoteprice
+        tradecost = costorproceed*tradefee
+        xfercost = networkfee*quoteprice
+        netvalue = costorproceed - tradecost - xfercost
+        netamt = amt - (amt*tradefee) -  networkfee
+
+        return netvalue, netamt
 
     elif exc == 'poloniex':
         f = poloniex(func='fees')
@@ -363,27 +370,41 @@ def checkStrategy(exc,tt,asset):
         tradefee = float(f[feetype])
         networkfee = networkfees(asset)
         quoteprice = float(q[pair][quotetype])
-        purchasecost = amt*quoteprice
-        tradecost = purchasecost*tradefee
+        costorproceed = amt*quoteprice
+        tradecost = costorproceed*tradefee
         xfercost = networkfee*quoteprice
-        netbuyvalue = purchasecost - tradecost - xfercost
-        netbuyamt = amt - (amt*tradefee) -  networkfee
-        return netbuyvalue, netbuyamt
+        netvalue = costorproceed - tradecost - xfercost
+        netamt = amt - (amt*tradefee) -  networkfee
+        return netvalue, netamt
     else:
         return None 
 
-netbuyvalue, netbuyamt = checkStrategy(exc='kraken',asset='BTC',tt='buy')
-print netbuyvalue
-print str(netbuyamt)+'\n'
-netbuyvalue, netbuyamt = checkStrategy(exc='kraken',asset='ETH',tt='buy')
-print netbuyvalue
-print str(netbuyamt)+'\n'
-netbuyvalue, netbuyamt = checkStrategy(exc='poloniex',asset='BTC',tt='buy')
-print netbuyvalue
-print str(netbuyamt)+'\n'
-netbuyvalue, netbuyamt = checkStrategy(exc='poloniex',asset='ETH',tt='buy')
-print netbuyvalue
-print str(netbuyamt)+'\n'
+
+buystrategies = [{'exc':'kraken','asset':'BTC','tt':'buy'},
+                 {'exc':'kraken','asset':'ETH','tt':'buy'},
+                 {'exc':'poloniex','asset':'BTC','tt':'buy'},
+                 {'exc':'poloniex','asset':'ETH','tt':'buy'}]
+for d in buystrategies:
+    d['netvalue'], d['netamt'] = checkStrategy(exc=d['exc'],asset=d['asset'],tt=d['tt'])
+    for i in d:
+        print i+': '+str(d[i])
+    print '\n'
+
+print '\n'
+
+sellstrategies = [{'exc':'kraken','asset':'BTC','tt':'sell'},
+                 {'exc':'kraken','asset':'ETH','tt':'sell'},
+                 {'exc':'poloniex','asset':'BTC','tt':'sell'},
+                 {'exc':'poloniex','asset':'ETH','tt':'sell'}]
+for d in sellstrategies:
+    d['netvalue'], d['netamt'] = checkStrategy(exc=d['exc'],asset=d['asset'],tt=d['tt'])
+    for i in d:
+        print i+': '+str(d[i])
+    print '\n'
+
+
+
+
 #Loop through each buy/sell point and currency pair and call checkStrategy. 
 #checkStrategy = Calculate End-2-End Opportinity (BuySell or SellBuy with ETH/BTC on Kraken/Polo) (8 combinations)
 #ExecuteTrade
