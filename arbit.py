@@ -318,70 +318,54 @@ print '\n\n'
 
 def checkStrategy(buypoint, buyasset, sellpoint=None, sellasset=None):
     amt=1.0
-
+    #For Kraken must also factor in additional fees + drift from ZUSD to USDT exchanges
     if buypoint == 'kraken':
-        f = kraken(func='fees', pair='XXBTZUSD,XETHZUSD')  #optional: pair='XXBTZUSD,XETHZUSD,USDTZUSD'
-        q = kraken(func='quote', pair='XXBTZUSD,XETHZUSD')
+        f = kraken(func='fees', pair='XXBTZUSD,XETHZUSD,USDTZUSD')  #optional: pair='XXBTZUSD,XETHZUSD,USDTZUSD'
+        q = kraken(func='quote', pair='XXBTZUSD,XETHZUSD,USDTZUSD')
         if buyasset == 'BTC':
-            tradefee = f['result']['XXBTZUSD']['fees'][0][1]/100.0
-            networkfee = networkfees(buyasset)
-            quoteprice = float(q['result']['XXBTZUSD']['a'][0])
-            purchasecost = amt*quoteprice
-            tradecost = purchasecost*tradefee
-            xfercost = networkfee*quoteprice
-            netbuyvalue = purchasecost - tradecost - xfercost
-            netbuyamt = amt - (amt*tradefee) -  networkfee
-            return netbuyvalue, netbuyamt
-
+            pair = 'XXBTZUSD'
         elif buyasset == 'ETH':
-            tradefee = f['result']['XETHZUSD']['fees'][0][1]/100.0
-            networkfee = networkfees(buyasset)
-            quoteprice = float(q['result']['XETHZUSD']['a'][0])
-            purchasecost = amt*quoteprice
-            tradecost = purchasecost*tradefee
-            xfercost = networkfee*quoteprice
-            netbuyvalue = purchasecost - tradecost - xfercost
-            netbuyamt = amt - (amt*tradefee) -  networkfee
-            return netbuyvalue, netbuyamt
+            pair = 'XETHZUSD'
         else:
             return None
+        tradefee = f['result'][pair]['fees'][0][1]/100.0
+        networkfee = networkfees(buyasset)
+        quoteprice = float(q['result'][pair]['a'][0])
+        purchasecost = amt*quoteprice
+        tradecost = purchasecost*tradefee
+        xfercost = networkfee*quoteprice
+        netbuyvalue = purchasecost - tradecost - xfercost
+        netbuyamt = amt - (amt*tradefee) -  networkfee
+        return netbuyvalue, netbuyamt
 
     elif buypoint == 'poloniex':
         f = poloniex(func='fees')
         q = poloniex(func='quote')
+        feetype = 'takerFee'
+        quotetype = 'lowestAsk'
         #print json.dumps(q,indent=4)
         if buyasset == 'BTC':
-            tradefee = float(f['takerFee'])
-            networkfee = networkfees(buyasset)
-            quoteprice = float(q['USDT_BTC']['lowestAsk'])
-            purchasecost = amt*quoteprice
-            tradecost = purchasecost*tradefee
-            xfercost = networkfee*quoteprice
-            netbuyvalue = purchasecost - tradecost - xfercost
-            netbuyamt = amt - (amt*tradefee) -  networkfee
-            return netbuyvalue, netbuyamt
-
+            pair = 'USDT_BTC'
         elif buyasset == 'ETH':
-            tradefee = float(f['takerFee'])
-            networkfee = networkfees(buyasset)
-            quoteprice = float(q['USDT_ETH']['lowestAsk'])
-            purchasecost = amt*quoteprice
-            tradecost = purchasecost*tradefee
-            xfercost = networkfee*quoteprice
-            netbuyvalue = purchasecost - tradecost - xfercost
-            netbuyamt = amt - (amt*tradefee) -  networkfee
-            return netbuyvalue, netbuyamt
-
+            pair = 'USDT_ETH'
         else:
             return None
+        tradefee = float(f[feetype])
+        networkfee = networkfees(buyasset)
+        quoteprice = float(q[pair][quotetype])
+        purchasecost = amt*quoteprice
+        tradecost = purchasecost*tradefee
+        xfercost = networkfee*quoteprice
+        netbuyvalue = purchasecost - tradecost - xfercost
+        netbuyamt = amt - (amt*tradefee) -  networkfee
+        return netbuyvalue, netbuyamt
     else:
         return None 
 
-
-netbuyvalue, netbuyamt = checkStrategy(buypoint='kraken',buyasset='ETH')
+netbuyvalue, netbuyamt = checkStrategy(buypoint='kraken',buyasset='BTC')
 print netbuyvalue
 print str(netbuyamt)+'\n'
-netbuyvalue, netbuyamt = checkStrategy(buypoint='kraken',buyasset='BTC')
+netbuyvalue, netbuyamt = checkStrategy(buypoint='kraken',buyasset='ETH')
 print netbuyvalue
 print str(netbuyamt)+'\n'
 netbuyvalue, netbuyamt = checkStrategy(buypoint='poloniex',buyasset='BTC')
