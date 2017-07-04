@@ -379,12 +379,11 @@ def checkStrategy(exc,tt,asset):
     else:
         return None 
 
-
-buystrategies = [{'exc':'kraken','asset':'BTC','tt':'buy'},
-                 {'exc':'kraken','asset':'ETH','tt':'buy'},
-                 {'exc':'poloniex','asset':'BTC','tt':'buy'},
-                 {'exc':'poloniex','asset':'ETH','tt':'buy'}]
-for d in buystrategies:
+buystrat = [{'exc':'kraken','asset':'BTC','tt':'buy'},
+            {'exc':'kraken','asset':'ETH','tt':'buy'},
+            {'exc':'poloniex','asset':'BTC','tt':'buy'},
+            {'exc':'poloniex','asset':'ETH','tt':'buy'}]
+for d in buystrat:
     d['netvalue'], d['netamt'] = checkStrategy(exc=d['exc'],asset=d['asset'],tt=d['tt'])
     for i in d:
         print i+': '+str(d[i])
@@ -392,17 +391,20 @@ for d in buystrategies:
 
 print '\n'
 
-sellstrategies = [{'exc':'kraken','asset':'BTC','tt':'sell'},
-                 {'exc':'kraken','asset':'ETH','tt':'sell'},
-                 {'exc':'poloniex','asset':'BTC','tt':'sell'},
-                 {'exc':'poloniex','asset':'ETH','tt':'sell'}]
-for d in sellstrategies:
+sellstrat = [{'exc':'kraken','asset':'BTC','tt':'sell'},
+             {'exc':'kraken','asset':'ETH','tt':'sell'},
+             {'exc':'poloniex','asset':'BTC','tt':'sell'},
+             {'exc':'poloniex','asset':'ETH','tt':'sell'}]
+for d in sellstrat:
     d['netvalue'], d['netamt'] = checkStrategy(exc=d['exc'],asset=d['asset'],tt=d['tt'])
     for i in d:
         print i+': '+str(d[i])
     print '\n'
 
-
+print (sellstrat[2]['netvalue']/buystrat[0]['netvalue'])-1.0
+print (sellstrat[3]['netvalue']/buystrat[1]['netvalue'])-1.0
+print (sellstrat[0]['netvalue']/buystrat[2]['netvalue'])-1.0
+print (sellstrat[1]['netvalue']/buystrat[3]['netvalue'])-1.0
 
 
 #Loop through each buy/sell point and currency pair and call checkStrategy. 
