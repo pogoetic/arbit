@@ -303,7 +303,8 @@ print 'netsellvalue: '+str(netsellvalue)
 print 'netsellamt: '+str(netsellamt)
 print 'gainonsale: '+str(gainonsale)
 
-def strategycheck(buypoint, sellpoint, buyasset, sellasset):
+
+def checkStrategy(buypoint, sellpoint, buyasset, sellasset):
     if buypoint == 'kraken':
         if buyasset == 'BTC':
             f = kraken(func='fees', pair='XXBTZUSD,XXBTXETH')  #optional: pair='XXBTZUSD,XETHZUSD,USDTZUSD'
@@ -321,13 +322,14 @@ def strategycheck(buypoint, sellpoint, buyasset, sellasset):
         else:
             return None
 
-    elif buypoint == 'polo':
+    elif buypoint == 'poloniex':
 
     else:
         return None 
 
-#1. Calculate End-2-End Opportinity (BuySell or SellBuy with ETH/BTC on Kraken/Polo) (8 combinations)
-#2. Execute
+#Loop through each buy/sell point and currency pair and call checkStrategy. 
+#checkStrategy = Calculate End-2-End Opportinity (BuySell or SellBuy with ETH/BTC on Kraken/Polo) (8 combinations)
+#ExecuteTrade
     #Buy
     #Check that its bought
     #(RECHECK STRATEGY)
