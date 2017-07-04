@@ -37,6 +37,7 @@ conn = pyodbc.connect(connstring)
 c = conn.cursor()
 
 sandbox = 1
+globalverbose = False
 
 if sandbox == 1:
     gemini_endpoint = gemini_test_endpoint
@@ -51,6 +52,10 @@ def show_response(r):
         print (r.headers)
         print json.dumps(r.json(), indent=4)
         print('Success!')
+
+def echo(msg, verbose=False):
+    if verbose == True or globalverbose == True:
+        print msg
 
 def gemini_private(func, pair=None, amt=None, price=None):
     #https://docs.gemini.com/rest-api/#private-api-invocation
@@ -386,10 +391,8 @@ buystrat = [{'exc':'kraken','asset':'BTC','tt':'buy'},
 for d in buystrat:
     d['netvalue'], d['netamt'] = checkStrategy(exc=d['exc'],asset=d['asset'],tt=d['tt'])
     for i in d:
-        print i+': '+str(d[i])
-    print '\n'
-
-print '\n'
+        echo(msg=i+': '+str(d[i]))
+    echo(msg='\n')
 
 sellstrat = [{'exc':'kraken','asset':'BTC','tt':'sell'},
              {'exc':'kraken','asset':'ETH','tt':'sell'},
@@ -398,13 +401,13 @@ sellstrat = [{'exc':'kraken','asset':'BTC','tt':'sell'},
 for d in sellstrat:
     d['netvalue'], d['netamt'] = checkStrategy(exc=d['exc'],asset=d['asset'],tt=d['tt'])
     for i in d:
-        print i+': '+str(d[i])
-    print '\n'
+        echo(msg=i+': '+str(d[i]))
+    echo(msg='\n')
 
-print (sellstrat[2]['netvalue']/buystrat[0]['netvalue'])-1.0
-print (sellstrat[3]['netvalue']/buystrat[1]['netvalue'])-1.0
-print (sellstrat[0]['netvalue']/buystrat[2]['netvalue'])-1.0
-print (sellstrat[1]['netvalue']/buystrat[3]['netvalue'])-1.0
+print buystrat[0]['exc']+'-'+buystrat[0]['asset']+' -> '+ sellstrat[2]['exc']+'-'+sellstrat[2]['asset']+' : '+str((sellstrat[2]['netvalue']/buystrat[0]['netvalue'])-1.0)
+print buystrat[1]['exc']+'-'+buystrat[1]['asset']+' -> '+ sellstrat[3]['exc']+'-'+sellstrat[3]['asset']+' : '+str((sellstrat[3]['netvalue']/buystrat[1]['netvalue'])-1.0)
+print buystrat[2]['exc']+'-'+buystrat[2]['asset']+' -> '+ sellstrat[0]['exc']+'-'+sellstrat[0]['asset']+' : '+str((sellstrat[0]['netvalue']/buystrat[2]['netvalue'])-1.0)
+print buystrat[3]['exc']+'-'+buystrat[3]['asset']+' -> '+ sellstrat[1]['exc']+'-'+sellstrat[1]['asset']+' : '+str((sellstrat[1]['netvalue']/buystrat[3]['netvalue'])-1.0)
 
 
 #Loop through each buy/sell point and currency pair and call checkStrategy. 
