@@ -153,8 +153,45 @@ def kraken(func, pair=None, amt=None, price=None):
                                  'close[volume]': '1'})
     """
 
-def kraken_private(command, req = {}):
-    return None 
+def kraken2(func, pair=None):
+    apiversion = '0'
+    req= {'nonce':int(1000*time.time())}
+    
+    if func == 'quote' and pair!=None: 
+        method = 'Ticker'
+        req['pair']=pair
+        url = kraken_endpoint+ '/' + apiversion + '/public/' + method
+        r = requests.post(url, data=req)
+        return r.json()
+    elif func == 'balance':
+        method = 'Balance'
+        urlpath ='/' + apiversion + '/private/' + method
+        url = kraken_endpoint+urlpath
+        postdata = urllib.urlencode(req)
+        message = urlpath + hashlib.sha256(str(req['nonce']) + postdata).digest()
+        signature = hmac.new(base64.b64decode(kraken_pk), message, hashlib.sha512)
+        headers = {'API-Key': kraken_k,
+                   'API-Sign': base64.b64encode(signature.digest())}
+        r = requests.post(url, data=req, headers=headers)
+        return r.json()
+    elif func == 'fees':
+        method = 'AssetPairs'
+        url = kraken_endpoint+ '/' + apiversion + '/public/' + method
+        if pair!=None:
+            req['pair']=pair
+        r = requests.post(url, data=req)  
+        print json.dumps(r.json(), indent=4)
+        return r.json()
+    elif func == 'assets': #get list of all Kraken currencies
+        method = 'Assets'
+        req['aclass']='currency'
+        if pair!=None:
+            req['asset']=pair
+        url = kraken_endpoint+ '/' + apiversion + '/public/' + method
+        r = requests.post(url, data=req)
+        return r.json()
+    else:    
+        return None 
 
 def polo_private(command, req = {}):
     req['command'] = command
@@ -413,6 +450,11 @@ print buystrat[0]['exc']+'-'+buystrat[0]['asset']+' -> '+ sellstrat[2]['exc']+'-
 print buystrat[1]['exc']+'-'+buystrat[1]['asset']+' -> '+ sellstrat[3]['exc']+'-'+sellstrat[3]['asset']+' : '+str((sellstrat[3]['netvalue']/buystrat[1]['netvalue'])-1.0)
 print buystrat[2]['exc']+'-'+buystrat[2]['asset']+' -> '+ sellstrat[0]['exc']+'-'+sellstrat[0]['asset']+' : '+str((sellstrat[0]['netvalue']/buystrat[2]['netvalue'])-1.0)
 print buystrat[3]['exc']+'-'+buystrat[3]['asset']+' -> '+ sellstrat[1]['exc']+'-'+sellstrat[1]['asset']+' : '+str((sellstrat[1]['netvalue']/buystrat[3]['netvalue'])-1.0)
+
+kraken2(func='fees',pair='XXBTZUSD,XETHZUSD,USDTZUSD')
+
+
+
 #For Kraken must also factor in additional fees + drift from ZUSD to USDT exchanges
     #If Polo->Kraken there is an extra 'Buy USDT' step before xfer back (this will eat profits)
 
