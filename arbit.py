@@ -8,7 +8,6 @@ import pyodbc
 import time
 import urllib
 import urllib2
-import krakenex
 # json, uuid
 
 #Keys
@@ -105,55 +104,21 @@ def gemini_public(pair):
     r =requests.get(gemini_endpoint+"/v1/pubticker/{}".format(pair))
     show_response(r)
 
+
+def kraken_private(method, req={}):
+    apiversion = '0'
+    req= {'nonce':int(1000*time.time())}
+    urlpath ='/' + apiversion + '/private/' + method
+    url = kraken_endpoint+urlpath
+    postdata = urllib.urlencode(req)
+    message = urlpath + hashlib.sha256(str(req['nonce']) + postdata).digest()
+    signature = hmac.new(base64.b64decode(kraken_pk), message, hashlib.sha512)
+    headers = {'API-Key': kraken_k,
+               'API-Sign': base64.b64encode(signature.digest())}
+    r = requests.post(url, data=req, headers=headers)
+    return r
+
 def kraken(func, pair=None, amt=None, price=None):
-    #rate limits: Only placing orders you intend to fill and keeping the rate down to 1 per second is generally enough to not hit this limit.
-    #headers
-    k = krakenex.API()
-    k.load_key('keys.cfg')
-
-    if func == 'balance':
-        r = k.query_private('Balance')
-        print json.dumps(r, indent=4)
-        return r
-
-    elif func == 'assets': #get list of all Kraken currencies
-        payload = {'aclass':'currency'}
-        if pair!=None:
-            payload['asset']=pair
-        r = k.query_public('Assets', payload)    
-        print json.dumps(r, indent=4)
-
-    elif func == 'fees':
-        payload = {}
-        if pair!=None:
-            payload['pair']=pair
-        r = k.query_public('AssetPairs', payload)    
-        #print json.dumps(r, indent=4)
-        return r
-
-    elif func == 'quote' and pair!=None: #get list of all Kraken currencies
-        payload = {'pair': pair}
-        r = k.query_public('Ticker', payload)    
-        return r
-        
-    elif func == 'buy':
-        return None
-    else: 
-        return None
-    """
-    k.query_private('AddOrder', {'pair': 'XXBTZEUR',
-                                 'type': 'buy',
-                                 'ordertype': 'limit',
-                                 'price': '1',
-                                 'volume': '1',
-                                 'close[pair]': 'XXBTZEUR',
-                                 'close[type]': 'sell',
-                                 'close[ordertype]': 'limit',
-                                 'close[price]': '9001',
-                                 'close[volume]': '1'})
-    """
-
-def kraken2(func, pair=None):
     apiversion = '0'
     req= {'nonce':int(1000*time.time())}
     
@@ -164,15 +129,7 @@ def kraken2(func, pair=None):
         r = requests.post(url, data=req)
         return r.json()
     elif func == 'balance':
-        method = 'Balance'
-        urlpath ='/' + apiversion + '/private/' + method
-        url = kraken_endpoint+urlpath
-        postdata = urllib.urlencode(req)
-        message = urlpath + hashlib.sha256(str(req['nonce']) + postdata).digest()
-        signature = hmac.new(base64.b64decode(kraken_pk), message, hashlib.sha512)
-        headers = {'API-Key': kraken_k,
-                   'API-Sign': base64.b64encode(signature.digest())}
-        r = requests.post(url, data=req, headers=headers)
+        r = kraken_private(method='Balance')
         return r.json()
     elif func == 'fees':
         method = 'AssetPairs'
@@ -180,7 +137,7 @@ def kraken2(func, pair=None):
         if pair!=None:
             req['pair']=pair
         r = requests.post(url, data=req)  
-        print json.dumps(r.json(), indent=4)
+        #print json.dumps(r.json(), indent=4)
         return r.json()
     elif func == 'assets': #get list of all Kraken currencies
         method = 'Assets'
@@ -192,6 +149,16 @@ def kraken2(func, pair=None):
         return r.json()
     else:    
         return None 
+    """kraken_private('AddOrder', {'pair': 'XXBTZEUR',
+                                 'type': 'buy',
+                                 'ordertype': 'limit',
+                                 'price': '1',
+                                 'volume': '1',
+                                 'close[pair]': 'XXBTZEUR',
+                                 'close[type]': 'sell',
+                                 'close[ordertype]': 'limit',
+                                 'close[price]': '9001',
+                                 'close[volume]': '1'})"""
 
 def polo_private(command, req = {}):
     req['command'] = command
@@ -450,11 +417,6 @@ print buystrat[0]['exc']+'-'+buystrat[0]['asset']+' -> '+ sellstrat[2]['exc']+'-
 print buystrat[1]['exc']+'-'+buystrat[1]['asset']+' -> '+ sellstrat[3]['exc']+'-'+sellstrat[3]['asset']+' : '+str((sellstrat[3]['netvalue']/buystrat[1]['netvalue'])-1.0)
 print buystrat[2]['exc']+'-'+buystrat[2]['asset']+' -> '+ sellstrat[0]['exc']+'-'+sellstrat[0]['asset']+' : '+str((sellstrat[0]['netvalue']/buystrat[2]['netvalue'])-1.0)
 print buystrat[3]['exc']+'-'+buystrat[3]['asset']+' -> '+ sellstrat[1]['exc']+'-'+sellstrat[1]['asset']+' : '+str((sellstrat[1]['netvalue']/buystrat[3]['netvalue'])-1.0)
-
-kraken2(func='fees',pair='XXBTZUSD,XETHZUSD,USDTZUSD')
-
-
-
 #For Kraken must also factor in additional fees + drift from ZUSD to USDT exchanges
     #If Polo->Kraken there is an extra 'Buy USDT' step before xfer back (this will eat profits)
 
