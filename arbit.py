@@ -153,6 +153,9 @@ def kraken(func, pair=None, amt=None, price=None):
                                  'close[volume]': '1'})
     """
 
+def kraken_private(command, req = {}):
+    return None 
+
 def polo_private(command, req = {}):
     req['command'] = command
     req['nonce'] = int(time.time()*1000)
@@ -323,7 +326,6 @@ print '\n\n'
 
 def checkStrategy(exc,tt,asset):
     amt=1.0
-    #For Kraken must also factor in additional fees + drift from ZUSD to USDT exchanges
     if exc == 'kraken':
         f = kraken(func='fees', pair='XXBTZUSD,XETHZUSD,USDTZUSD')  #optional: pair='XXBTZUSD,XETHZUSD,USDTZUSD'
         q = kraken(func='quote', pair='XXBTZUSD,XETHZUSD,USDTZUSD')
@@ -331,6 +333,8 @@ def checkStrategy(exc,tt,asset):
             pair = 'XXBTZUSD'
         elif asset == 'ETH':
             pair = 'XETHZUSD'
+        elif asset == 'USDT':
+            pair = 'USDTZUSD'
         else:
             return None
 
@@ -384,6 +388,7 @@ def checkStrategy(exc,tt,asset):
     else:
         return None 
 
+#Loop through each buy/sell point and currency pair and call checkStrategy. 
 buystrat = [{'exc':'kraken','asset':'BTC','tt':'buy'},
             {'exc':'kraken','asset':'ETH','tt':'buy'},
             {'exc':'poloniex','asset':'BTC','tt':'buy'},
@@ -408,9 +413,9 @@ print buystrat[0]['exc']+'-'+buystrat[0]['asset']+' -> '+ sellstrat[2]['exc']+'-
 print buystrat[1]['exc']+'-'+buystrat[1]['asset']+' -> '+ sellstrat[3]['exc']+'-'+sellstrat[3]['asset']+' : '+str((sellstrat[3]['netvalue']/buystrat[1]['netvalue'])-1.0)
 print buystrat[2]['exc']+'-'+buystrat[2]['asset']+' -> '+ sellstrat[0]['exc']+'-'+sellstrat[0]['asset']+' : '+str((sellstrat[0]['netvalue']/buystrat[2]['netvalue'])-1.0)
 print buystrat[3]['exc']+'-'+buystrat[3]['asset']+' -> '+ sellstrat[1]['exc']+'-'+sellstrat[1]['asset']+' : '+str((sellstrat[1]['netvalue']/buystrat[3]['netvalue'])-1.0)
+#For Kraken must also factor in additional fees + drift from ZUSD to USDT exchanges
+    #If Polo->Kraken there is an extra 'Buy USDT' step before xfer back (this will eat profits)
 
-
-#Loop through each buy/sell point and currency pair and call checkStrategy. 
 #checkStrategy = Calculate End-2-End Opportinity (BuySell or SellBuy with ETH/BTC on Kraken/Polo) (8 combinations)
 #ExecuteTrade
     #Buy
