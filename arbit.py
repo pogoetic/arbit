@@ -104,7 +104,6 @@ def gemini_public(pair):
     r =requests.get(gemini_endpoint+"/v1/pubticker/{}".format(pair))
     show_response(r)
 
-
 def kraken_private(method, req={}):
     apiversion = '0'
     req= {'nonce':int(1000*time.time())}
@@ -118,37 +117,52 @@ def kraken_private(method, req={}):
     r = requests.post(url, data=req, headers=headers)
     return r
 
-def kraken(func, pair=None, amt=None, price=None):
-    apiversion = '0'
-    req= {'nonce':int(1000*time.time())}
-    
-    if func == 'quote' and pair!=None: 
-        method = 'Ticker'
-        req['pair']=pair
-        url = kraken_endpoint+ '/' + apiversion + '/public/' + method
-        r = requests.post(url, data=req)
-        return r.json()
-    elif func == 'balance':
-        r = kraken_private(method='Balance')
-        return r.json()
-    elif func == 'fees':
-        method = 'AssetPairs'
-        url = kraken_endpoint+ '/' + apiversion + '/public/' + method
-        if pair!=None:
+def kraken(func, pair=None, amt=None, price=None, asset=None):
+    while True:
+        apiversion = '0'
+        req= {'nonce':int(1000*time.time())}
+        
+        if func == 'quote' and pair!=None: 
+            method = 'Ticker'
             req['pair']=pair
-        r = requests.post(url, data=req)  
-        #print json.dumps(r.json(), indent=4)
-        return r.json()
-    elif func == 'assets': #get list of all Kraken currencies
-        method = 'Assets'
-        req['aclass']='currency'
-        if pair!=None:
-            req['asset']=pair
-        url = kraken_endpoint+ '/' + apiversion + '/public/' + method
-        r = requests.post(url, data=req)
-        return r.json()
-    else:    
-        return None 
+            url = kraken_endpoint+ '/' + apiversion + '/public/' + method
+            r = requests.post(url, data=req)
+
+        elif func == 'balance':
+            r = kraken_private(method='Balance')
+
+        elif func == 'fees':
+            method = 'AssetPairs'
+            url = kraken_endpoint+ '/' + apiversion + '/public/' + method
+            if pair!=None:
+                req['pair']=pair
+            r = requests.post(url, data=req)  
+            #print json.dumps(r.json(), indent=4)
+
+        elif func == 'withdraw':
+            req['asset']=asset
+            req['amount']=amt
+            req['key']='13YLooDEXuf4UtdqchJJ99j2PPAk77Q4Si'
+            r = kraken_private(method='WithdrawInfo',req=req)
+            show_response(r)
+
+        elif func == 'assets': #get list of all Kraken currencies
+            method = 'Assets'
+            req['aclass']='currency'
+            if pair!=None:
+                req['asset']=pair
+            url = kraken_endpoint+ '/' + apiversion + '/public/' + method
+            r = requests.post(url, data=req)
+
+        else:    
+            return None 
+
+        if not r.raise_for_status():
+                return r.json()
+                break
+        else:
+            print r.status_code
+            continue
     """kraken_private('AddOrder', {'pair': 'XXBTZEUR',
                                  'type': 'buy',
                                  'ordertype': 'limit',
@@ -193,8 +207,7 @@ def poloniex(func, pair=None, amt=None, price=None):
         r = polo_private(command='returnFeeInfo')
         return r
 
-
-def networkfees(asset):
+def networkfees(asset, exc=None):
     #Bitcoin xfer Fees
     #https://bitcoinfees.21.co/api
         # The lowest fee (in satoshis per byte) that will currently result in the fastest transaction confirmations (usually 0 to 1 block delay).
@@ -206,21 +219,32 @@ def networkfees(asset):
     #https://www.blockcypher.com/dev/ethereum/#chain-endpoint
         #Returns the current gas price in Wei (1Wei = 0.000000000000000001 ETH)
         #https://api.blockcypher.com/v1/eth/main
-
-    if asset == 'BTC':
-        endpoint='https://bitcoinfees.21.co/api/v1/fees/recommended'
-        r =requests.get(endpoint)
-        r = r.json()
-        #print 'BTC Fee: '+str(r['fastestFee']/100000000.0) #Fee returned in Satoshis per Byte
-        #print 'Expected Cost BTC = '+ str(225*r['fastestFee']/100000000.0)
-        return 225*r['fastestFee']/100000000.0
-    elif asset == 'ETH':
-        endpoint='https://api.blockcypher.com/v1/eth/main'
-        r =requests.get(endpoint)
-        r = r.json()
-        #print 'ETH Fee: '+str(r['high_gas_price']/1000000000000000000.0) #Fee returned in Wei per Byte
-        #print 'Expected cost ETH = '+str(21000*r['high_gas_price']/1000000000000000000.0)
-        return 21000*r['high_gas_price']/1000000000000000000.0
+    if exc is None:
+        if asset == 'BTC':
+            endpoint='https://bitcoinfees.21.co/api/v1/fees/recommended'
+            r =requests.get(endpoint)
+            r = r.json()
+            #print 'BTC Fee: '+str(r['fastestFee']/100000000.0) #Fee returned in Satoshis per Byte
+            #print 'Expected Cost BTC = '+ str(225*r['fastestFee']/100000000.0)
+            return 225*r['fastestFee']/100000000.0
+        elif asset == 'ETH':
+            endpoint='https://api.blockcypher.com/v1/eth/main'
+            r =requests.get(endpoint)
+            r = r.json()
+            #print 'ETH Fee: '+str(r['high_gas_price']/1000000000000000000.0) #Fee returned in Wei per Byte
+            #print 'Expected cost ETH = '+str(21000*r['high_gas_price']/1000000000000000000.0)
+            return 21000*r['high_gas_price']/1000000000000000000.0
+    else: #Exchanges charge fixed fees, no need to calculate
+        if exc=='kraken':
+            withdrawalfees = {'BTC':0.001,
+                              'ETH':0.005,
+                              'USDT':5.000,
+                              'USD':5.000}
+        elif exc =='poloniex':
+            withdrawalfees = {'BTC':0.0001,
+                              'ETH':0.005,
+                              'USDT':2.000}
+        return withdrawalfees[asset]
 
 
 #############################################################
@@ -328,8 +352,7 @@ print 'gainonsale: '+str(gainonsale)
 """
 print '\n\n'
 
-def checkStrategy(exc,tt,asset):
-    amt=1.0
+def checkStrategy(exc,tt,asset,amt=1.0):
     if exc == 'kraken':
         f = kraken(func='fees', pair='XXBTZUSD,XETHZUSD,USDTZUSD')  #optional: pair='XXBTZUSD,XETHZUSD,USDTZUSD'
         q = kraken(func='quote', pair='XXBTZUSD,XETHZUSD,USDTZUSD')
@@ -345,18 +368,32 @@ def checkStrategy(exc,tt,asset):
         if tt == 'buy':
             feetype = 'fees'
             quotetype = 'a'
+            tradefee = f['result'][pair][feetype][0][1]/100.0
+            quoteprice = float(q['result'][pair][quotetype][0])
+            costorproceed = amt*quoteprice
+            tradecost = costorproceed*tradefee
+            networkfee = networkfees(asset,exc)
+            xfercost = networkfee*quoteprice
+            netvalue = costorproceed - tradecost - xfercost
+            netamt = amt - (amt*tradefee) - networkfee
+
         elif tt == 'sell':
             feetype = 'fees_maker'
             quotetype = 'b'
+            tradefee = f['result'][pair][feetype][0][1]/100.0
+            quoteprice = float(q['result'][pair][quotetype][0])
+            costorproceed = amt*quoteprice
+            tradecost = costorproceed*tradefee
+            netvalue = costorproceed - tradecost
 
-        tradefee = f['result'][pair][feetype][0][1]/100.0
-        networkfee = networkfees(asset)
-        quoteprice = float(q['result'][pair][quotetype][0])
-        costorproceed = amt*quoteprice
-        tradecost = costorproceed*tradefee
-        xfercost = networkfee*quoteprice
-        netvalue = costorproceed - tradecost - xfercost
-        netamt = amt - (amt*tradefee) -  networkfee
+            #If selling on Kraken we need to sell to fiat then buy USDT before xfer back
+            tradefeeUSDT = f['result']['USDTZUSD'][feetype][0][1]/100.0
+            quotepriceUSDT = float(q['result']['USDTZUSD'][quotetype][0])
+            networkfeeUSDT = networkfees('USDT','kraken')
+            costorproceed = netvalue/quotepriceUSDT
+            tradecost = costorproceed*tradefeeUSDT
+            netvalue = costorproceed - tradecost - networkfeeUSDT
+            netamt = netvalue/quoteprice
 
         return netvalue, netamt
 
@@ -381,7 +418,7 @@ def checkStrategy(exc,tt,asset):
             return None
 
         tradefee = float(f[feetype])
-        networkfee = networkfees(asset)
+        networkfee = networkfees(asset,exc)
         quoteprice = float(q[pair][quotetype])
         costorproceed = amt*quoteprice
         tradecost = costorproceed*tradefee
@@ -413,10 +450,14 @@ for d in sellstrat:
         echo(msg=i+': '+str(d[i]))
     echo(msg='\n')
 
-print buystrat[0]['exc']+'-'+buystrat[0]['asset']+' -> '+ sellstrat[2]['exc']+'-'+sellstrat[2]['asset']+' : '+str((sellstrat[2]['netvalue']/buystrat[0]['netvalue'])-1.0)
-print buystrat[1]['exc']+'-'+buystrat[1]['asset']+' -> '+ sellstrat[3]['exc']+'-'+sellstrat[3]['asset']+' : '+str((sellstrat[3]['netvalue']/buystrat[1]['netvalue'])-1.0)
-print buystrat[2]['exc']+'-'+buystrat[2]['asset']+' -> '+ sellstrat[0]['exc']+'-'+sellstrat[0]['asset']+' : '+str((sellstrat[0]['netvalue']/buystrat[2]['netvalue'])-1.0)
-print buystrat[3]['exc']+'-'+buystrat[3]['asset']+' -> '+ sellstrat[1]['exc']+'-'+sellstrat[1]['asset']+' : '+str((sellstrat[1]['netvalue']/buystrat[3]['netvalue'])-1.0)
+for b in buystrat:
+    for s in sellstrat:
+        if b['exc'] != s['exc'] and b['asset']==s['asset']:
+            #Valid strategies have differing exchange, same asset
+            print b['exc']+'-'+b['asset']+' -> '+ s['exc']+'-'+s['asset']+' : '+str((s['netvalue']/b['netvalue'])-1.0)
+
+
+
 #For Kraken must also factor in additional fees + drift from ZUSD to USDT exchanges
     #If Polo->Kraken there is an extra 'Buy USDT' step before xfer back (this will eat profits)
 
