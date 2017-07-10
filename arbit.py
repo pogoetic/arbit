@@ -189,23 +189,32 @@ def polo_private(command, req = {}):
         filtered = {k: v for k, v in r.json().iteritems() if v!='0.00000000'}
         return filtered
     else:
-        return r.json()
+        return r
 
 def poloniex(func, pair=None, amt=None, price=None):
     req = {}
+    while True:
+        if func == 'balance':
+            r = polo_private(command='returnBalances')
+            if not r.raise_for_status():
+                return r
+                break
+            else:
+                continue
 
-    if func == 'balance':
-        r = polo_private(command='returnBalances')
-        return r
+        if func == 'quote':
+            req['command'] = 'returnTicker'
+            r = requests.get(polo_public_endpoint,params=req)
 
-    if func == 'quote':
-        req['command'] = 'returnTicker'
-        r = requests.get(polo_public_endpoint,params=req)
-        return r.json()
+        if func == 'fees':
+            r = polo_private(command='returnFeeInfo')
 
-    if func == 'fees':
-        r = polo_private(command='returnFeeInfo')
-        return r
+        if not r.raise_for_status():
+            return r.json()
+            break
+        else:
+            print r.status_code
+            continue
 
 def networkfees(asset, exc=None):
     #Bitcoin xfer Fees
@@ -376,6 +385,7 @@ def checkStrategy(exc,tt,asset,amt=1.0):
             xfercost = networkfee*quoteprice
             netvalue = costorproceed - tradecost - xfercost
             netamt = amt - (amt*tradefee) - networkfee
+            totalcostpct = (amt/netamt) - 1
 
         elif tt == 'sell':
             feetype = 'fees_maker'
@@ -394,8 +404,9 @@ def checkStrategy(exc,tt,asset,amt=1.0):
             tradecost = costorproceed*tradefeeUSDT
             netvalue = costorproceed - tradecost - networkfeeUSDT
             netamt = netvalue/quoteprice
+            totalcostpct = (amt/netamt) - 1
 
-        return netvalue, netamt
+        return netvalue, netamt, totalcostpct, quoteprice
 
     elif exc == 'poloniex':
         f = poloniex(func='fees')
@@ -425,7 +436,8 @@ def checkStrategy(exc,tt,asset,amt=1.0):
         xfercost = networkfee*quoteprice
         netvalue = costorproceed - tradecost - xfercost
         netamt = amt - (amt*tradefee) -  networkfee
-        return netvalue, netamt
+        totalcostpct = (amt/netamt) - 1
+        return netvalue, netamt, totalcostpct, quoteprice
     else:
         return None 
 
@@ -435,7 +447,7 @@ buystrat = [{'exc':'kraken','asset':'BTC','tt':'buy'},
             {'exc':'poloniex','asset':'BTC','tt':'buy'},
             {'exc':'poloniex','asset':'ETH','tt':'buy'}]
 for d in buystrat:
-    d['netvalue'], d['netamt'] = checkStrategy(exc=d['exc'],asset=d['asset'],tt=d['tt'])
+    d['netvalue'], d['netamt'], d['totalcostpct'], d['quoteprice'] = checkStrategy(exc=d['exc'],asset=d['asset'],tt=d['tt'])
     for i in d:
         echo(msg=i+': '+str(d[i]))
     echo(msg='\n')
@@ -445,7 +457,7 @@ sellstrat = [{'exc':'kraken','asset':'BTC','tt':'sell'},
              {'exc':'poloniex','asset':'BTC','tt':'sell'},
              {'exc':'poloniex','asset':'ETH','tt':'sell'}]
 for d in sellstrat:
-    d['netvalue'], d['netamt'] = checkStrategy(exc=d['exc'],asset=d['asset'],tt=d['tt'])
+    d['netvalue'], d['netamt'], d['totalcostpct'], d['quoteprice'] = checkStrategy(exc=d['exc'],asset=d['asset'],tt=d['tt'])
     for i in d:
         echo(msg=i+': '+str(d[i]))
     echo(msg='\n')
@@ -454,8 +466,8 @@ for b in buystrat:
     for s in sellstrat:
         if b['exc'] != s['exc'] and b['asset']==s['asset']:
             #Valid strategies have differing exchange, same asset
-            print b['exc']+'-'+b['asset']+' -> '+ s['exc']+'-'+s['asset']+' : '+str((s['netvalue']/b['netvalue'])-1.0)
-
+            #print b['exc']+'-'+b['asset']+' @'+' -> '+ s['exc']+'-'+s['asset']+' : '+str((s['netvalue']/b['netvalue'])-1.0)+' | totalcostpct : '+str(s['totalcostpct']+b['totalcostpct'])
+            print '{}-{} @{} -> {}-{} @{} | netreturn: {} | totalcostpct: {}'.format(b['exc'],b['asset'],b['quoteprice'],s['exc'],s['asset'],s['quoteprice'],str((s['netvalue']/b['netvalue'])-1.0),str(s['totalcostpct']+b['totalcostpct']))
 
 
 #For Kraken must also factor in additional fees + drift from ZUSD to USDT exchanges
