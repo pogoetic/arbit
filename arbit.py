@@ -198,7 +198,7 @@ def poloniex(func, pair=None, amt=None, price=None):
             r = polo_private(command='returnBalances')
             return r
             break
-            
+
         if func == 'quote':
             req['command'] = 'returnTicker'
             r = requests.get(polo_public_endpoint,params=req)
@@ -459,16 +459,30 @@ for d in sellstrat:
         echo(msg=i+': '+str(d[i]))
     echo(msg='\n')
 
-for b in buystrat:
-    for s in sellstrat:
-        if b['exc'] != s['exc'] and b['asset']==s['asset']:
-            #Valid strategies have differing exchange, same asset
-            #print b['exc']+'-'+b['asset']+' @'+' -> '+ s['exc']+'-'+s['asset']+' : '+str((s['netvalue']/b['netvalue'])-1.0)+' | totalcostpct : '+str(s['totalcostpct']+b['totalcostpct'])
-            print '{}-{} @{} -> {}-{} @{} | netreturn: {} | totalcostpct: {}'.format(b['exc'],b['asset'],b['quoteprice'],s['exc'],s['asset'],s['quoteprice'],str((s['netvalue']/b['netvalue'])-1.0),str(s['totalcostpct']+b['totalcostpct']))
+#Strategy Check Loop
+execute_threshold = .002
 
+while True:
+    gains=[]
+    print '\n'
+    for b in buystrat:
+        for s in sellstrat:
+            if b['exc'] != s['exc'] and b['asset']==s['asset']:
+                #Valid strategies have differing exchange, same asset
+                netgain = (s['netvalue']/b['netvalue'])-1.0
+                totalfees = s['totalcostpct']+b['totalcostpct']
+                print '{}-{} @{} -> {}-{} @{} | netreturn: {} | totalcostpct: {}'.format(b['exc'],b['asset'],b['quoteprice'],s['exc'],s['asset'],s['quoteprice'],str(netgain),str(totalfees))
 
-#For Kraken must also factor in additional fees + drift from ZUSD to USDT exchanges
-    #If Polo->Kraken there is an extra 'Buy USDT' step before xfer back (this will eat profits)
+                gains.append([b['asset'],b['exc'],s['exc'],netgain])
+
+    for g in gains:
+        if g[3]>0 and g[3]>=execute_threshold:
+            #if any of our gains exceed this threshold net of fees, we begin execution
+            break
+ 
+    time.sleep(120)
+
+print gains
 
 #checkStrategy = Calculate End-2-End Opportinity (BuySell or SellBuy with ETH/BTC on Kraken/Polo) (8 combinations)
 #ExecuteTrade
