@@ -157,7 +157,7 @@ def kraken(func, pair=None, amt=None, price=None, asset=None):
         else:    
             return None 
 
-        if not r.raise_for_status():
+        if r.status_code == requests.codes.ok:
                 return r.json()
                 break
         else:
@@ -196,12 +196,9 @@ def poloniex(func, pair=None, amt=None, price=None):
     while True:
         if func == 'balance':
             r = polo_private(command='returnBalances')
-            if not r.raise_for_status():
-                return r
-                break
-            else:
-                continue
-
+            return r
+            break
+            
         if func == 'quote':
             req['command'] = 'returnTicker'
             r = requests.get(polo_public_endpoint,params=req)
@@ -209,7 +206,7 @@ def poloniex(func, pair=None, amt=None, price=None):
         if func == 'fees':
             r = polo_private(command='returnFeeInfo')
 
-        if not r.raise_for_status():
+        if r.status_code == requests.codes.ok:
             return r.json()
             break
         else:
