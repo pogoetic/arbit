@@ -438,51 +438,57 @@ def checkStrategy(exc,tt,asset,amt=1.0):
     else:
         return None 
 
-#Loop through each buy/sell point and currency pair and call checkStrategy. 
-buystrat = [{'exc':'kraken','asset':'BTC','tt':'buy'},
-            {'exc':'kraken','asset':'ETH','tt':'buy'},
-            {'exc':'poloniex','asset':'BTC','tt':'buy'},
-            {'exc':'poloniex','asset':'ETH','tt':'buy'}]
-for d in buystrat:
-    d['netvalue'], d['netamt'], d['totalcostpct'], d['quoteprice'] = checkStrategy(exc=d['exc'],asset=d['asset'],tt=d['tt'])
-    for i in d:
-        echo(msg=i+': '+str(d[i]))
-    echo(msg='\n')
 
-sellstrat = [{'exc':'kraken','asset':'BTC','tt':'sell'},
-             {'exc':'kraken','asset':'ETH','tt':'sell'},
-             {'exc':'poloniex','asset':'BTC','tt':'sell'},
-             {'exc':'poloniex','asset':'ETH','tt':'sell'}]
-for d in sellstrat:
-    d['netvalue'], d['netamt'], d['totalcostpct'], d['quoteprice'] = checkStrategy(exc=d['exc'],asset=d['asset'],tt=d['tt'])
-    for i in d:
-        echo(msg=i+': '+str(d[i]))
-    echo(msg='\n')
+def strategyLoop():
+    #Loop through each buy/sell point and currency pair and call checkStrategy. 
+    buystrat = [{'exc':'kraken','asset':'BTC','tt':'buy'},
+                {'exc':'kraken','asset':'ETH','tt':'buy'},
+                {'exc':'poloniex','asset':'BTC','tt':'buy'},
+                {'exc':'poloniex','asset':'ETH','tt':'buy'}]
 
-#Strategy Check Loop
-execute_threshold = .002
+    sellstrat = [{'exc':'kraken','asset':'BTC','tt':'sell'},
+                 {'exc':'kraken','asset':'ETH','tt':'sell'},
+                 {'exc':'poloniex','asset':'BTC','tt':'sell'},
+                 {'exc':'poloniex','asset':'ETH','tt':'sell'}]
 
-while True:
-    gains=[]
-    print '\n'
-    for b in buystrat:
-        for s in sellstrat:
-            if b['exc'] != s['exc'] and b['asset']==s['asset']:
-                #Valid strategies have differing exchange, same asset
-                netgain = (s['netvalue']/b['netvalue'])-1.0
-                totalfees = s['totalcostpct']+b['totalcostpct']
-                print '{}-{} @{} -> {}-{} @{} | netreturn: {} | totalcostpct: {}'.format(b['exc'],b['asset'],b['quoteprice'],s['exc'],s['asset'],s['quoteprice'],str(netgain),str(totalfees))
+    while True:
 
-                gains.append([b['asset'],b['exc'],s['exc'],netgain])
+        for d in buystrat:
+            d['netvalue'], d['netamt'], d['totalcostpct'], d['quoteprice'] = checkStrategy(exc=d['exc'],asset=d['asset'],tt=d['tt'])
+            for i in d:
+                echo(msg=i+': '+str(d[i]))
+            echo(msg='\n')
 
-    for g in gains:
-        if g[3]>0 and g[3]>=execute_threshold:
-            #if any of our gains exceed this threshold net of fees, we begin execution
-            break
- 
-    time.sleep(120)
+        for d in sellstrat:
+            d['netvalue'], d['netamt'], d['totalcostpct'], d['quoteprice'] = checkStrategy(exc=d['exc'],asset=d['asset'],tt=d['tt'])
+            for i in d:
+                echo(msg=i+': '+str(d[i]))
+            echo(msg='\n')
 
-print gains
+        #Strategy Check Loop
+        execute_threshold = .002
+
+        gains=[]
+        print '\n'
+        for b in buystrat:
+            for s in sellstrat:
+                if b['exc'] != s['exc'] and b['asset']==s['asset']:
+                    #Valid strategies have differing exchange, same asset
+                    netgain = (s['netvalue']/b['netvalue'])-1.0
+                    totalfees = s['totalcostpct']+b['totalcostpct']
+                    print '{}-{} @{} -> {}-{} @{} | netreturn: {} | totalcostpct: {}'.format(b['exc'],b['asset'],b['quoteprice'],s['exc'],s['asset'],s['quoteprice'],str(netgain),str(totalfees))
+
+                    gains.append([b['asset'],b['exc'],s['exc'],netgain])
+
+        for g in gains:
+            if g[3]>0 and g[3]>=execute_threshold:
+                #if any of our gains exceed this threshold net of fees, we begin execution
+                print gains
+                return None
+     
+        time.sleep(120)
+
+strategyLoop()
 
 #checkStrategy = Calculate End-2-End Opportinity (BuySell or SellBuy with ETH/BTC on Kraken/Polo) (8 combinations)
 #ExecuteTrade
